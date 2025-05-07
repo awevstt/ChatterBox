@@ -1,0 +1,124 @@
+﻿@model List<AIMessage>
+@using System.Globalization
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+
+@{
+    ViewData["Title"] = "AI Chat";
+    string currentDate = "";
+    string? currentUserId = UserManager.GetUserId(User);
+    if (string.IsNullOrEmpty(currentUserId))
+    {
+        <text>Помилка: Відсутнє підключення до Інтеренту.</text>
+        return;
+    }
+
+}
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header d-flex align-items-center bg-white">
+                    <i class="bi bi-robot fs-4 me-2 text-primary"></i>
+                    <h5 class="mb-0">AI Chat</h5>
+                </div>
+                <div class="card-body ai-chat-container" id="chatBox">
+                    @foreach (var message in Model
+                    .Where(m => m.UserId == currentUserId)
+                    .OrderBy(m => m.SentAt))
+                    {
+                        var msgDate = message.SentAt.ToString("dd MMMM yyyy", new CultureInfo("uk-UA"));
+                        if (msgDate != currentDate)
+                        {
+                            <div class="ai-chat-date-label">@msgDate</div>
+                            currentDate = msgDate;
+                        }
+
+                        <div class="d-flex mb-3 @(message.Sender == "AI" ? "justify-content-start" : "justify-content-end")">
+                            <div class="ai-chat-message @(message.Sender == "AI" ? "ai-chat-ai" : "ai-chat-user")">
+                                <p class="mb-1">@message.Content</p>
+                                <small class="ai-chat-timestamp">@message.SentAt.ToString("dd MMM yyyy, HH:mm", new CultureInfo("uk-UA"))</small>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="card-footer d-flex">
+                    <input type="text" id="messageInput" class="form-control me-2" placeholder="Type your message..." />
+                    <button id="sendMessage" class="btn btn-primary">
+                        <i class="bi bi-send-fill"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <script>
+        var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
+
+        connection.start().then(function () {
+            var chatBox = document.getElementById("chatBox");
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }).catch(function (err) {
+            return console.error(err.toString());
+        });
+
+        function sendMessage() {
+            var message = $("#messageInput").val();
+            if (!message.trim()) return;
+
+            var now = new Date();
+            var formattedDate = now.toLocaleString('uk-UA', {
+                day: '2-digit', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+
+            $("#chatBox").append(`
+                <div class="d-flex mb-3 justify-content-end">
+                    <div class="ai-chat-message ai-chat-user">
+                        <p class="mb-1">${message}</p>
+                        <small class="ai-chat-timestamp">${formattedDate}</small>
+                    </div>
+                </div>
+            `);
+
+            $("#messageInput").val("");
+            $("#chatBox").scrollTop($("#chatBox")[0].scrollHeight);
+
+            connection.invoke("SendMessageToAI", message).catch(function (err) {
+                return console.error(err.toString());
+            });
+        }
+
+        $("#sendMessage").click(sendMessage);
+        $("#messageInput").keypress(function (e) {
+            if (e.which === 13 && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        connection.on("ReceiveAIMessage", function (message) {
+            var now = new Date();
+            var formattedDate = now.toLocaleString('uk-UA', {
+                day: '2-digit', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+
+            $("#chatBox").append(`
+                <div class="d-flex mb-3 justify-content-start">
+                    <div class="ai-chat-message ai-chat-ai">
+                        <p class="mb-1">${message}</p>
+                        <small class="ai-chat-timestamp">${formattedDate}</small>
+                    </div>
+                </div>
+            `);
+
+            $("#chatBox").scrollTop($("#chatBox")[0].scrollHeight);
+        });
+    </script>
+}

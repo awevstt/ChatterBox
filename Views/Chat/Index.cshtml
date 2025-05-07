@@ -1,0 +1,533 @@
+﻿@{
+    ViewData["Title"] = "Chat";
+}
+
+<div class="container-fluid p-4">
+    <div class="row g-4">
+        <div class="col-md-3">
+            <div class="card mb-4">
+                <div class="card-header d-flex align-items-center">
+                    <i class="bi bi-person-circle me-2"></i>
+                    <h5 class="mb-0">My Status</h5>
+                </div>
+                <div class="card-body">
+                    <select id="statusSelect" class="form-select">
+                        <option value="Online">Online</option>
+                        <option value="Away">Away</option>
+                        <option value="Busy">Busy</option>
+                        <option value="Do Not Disturb">Do Not Disturb</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header d-flex align-items-center">
+                    <i class="bi bi-people-fill me-2"></i>
+                    <h5 class="mb-0">Contacts</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="onlineUsersList" class="list-group list-group-flush">
+                        <!-- Users will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar me-3">
+                            <i class="bi bi-person-circle fs-4"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0" id="selectedUserName"></h5>
+                            <small id="userStatus" class="text-muted"></small>
+                        </div>
+                    </div>
+                    <div>
+                        <span id="userTypingIndicator" class="text-muted" style="display: none;"></span>
+                    </div>
+                </div>
+
+                <div id="messagesList" class="chat-messages">
+                    <div class="text-center text-muted p-4">
+                        <i class="bi bi-chat-dots fs-1"></i>
+                        <p class="mt-2">Select a contact to start chatting</p>
+                    </div>
+                </div>
+
+                <div class="chat-input-container">
+                    <input type="text" 
+                           id="messageInput" 
+                           class="chat-input" 
+                           placeholder="Type your message..." 
+                           disabled>
+                    <button class="chat-send-btn" id="sendButton" disabled>
+                        <i class="bi bi-send-fill"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/microsoft/signalr/dist/browser/signalr.js"></script>
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/chatHub")
+            .withAutomaticReconnect([0, 2000, 5000, 10000])
+            .build();
+
+        let selectedUserId = null;
+        let currentUserName = '';
+        let typingTimer = null;
+        const unreadMessages = new Map();
+        let lastMessageDate = null;
+
+        // Initialize from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        selectedUserId = urlParams.get('userId');
+
+        function formatMessageDateTime(dateString) {
+            const messageDate = new Date(dateString);
+            const now = new Date();
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            const isToday = messageDate.toDateString() === now.toDateString();
+            const isYesterday = messageDate.toDateString() === yesterday.toDateString();
+
+            const time = messageDate.toLocaleTimeString('uk-UA', {
+                timeZone: 'Europe/Amsterdam',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+
+
+            if (isToday) {
+                return time;
+            } else if (isYesterday) {
+                return `Yesterday, ${time}`;
+            } else {
+                return messageDate.toLocaleString('uk-UA', {
+                    timeZone: 'Europe/Amsterdam',
+                    month: 'short',
+                    day: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+
+            }
+        }
+
+        function shouldShowDateSeparator(messageDate) {
+            const currentDate = new Date(messageDate).toDateString();
+            if (currentDate !== lastMessageDate) {
+                lastMessageDate = currentDate;
+                return true;
+            }
+            return false;
+        }
+
+        function createDateSeparator(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            let dateText;
+            if (date.toDateString() === now.toDateString()) {
+                dateText = 'Today';
+            } else if (date.toDateString() === yesterday.toDateString()) {
+                dateText = 'Yesterday';
+            } else {
+                dateText = date.toLocaleDateString('uk-UA', {
+                    timeZone: 'Europe/Amsterdam',
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+
+            }
+
+            const separator = document.createElement('div');
+            separator.className = 'date-separator';
+            separator.innerHTML = `<span>${dateText}</span>`;
+            return separator;
+        }
+
+        async function startConnection() {
+            try {
+                await connection.start();
+                console.log("Connected to SignalR hub");
+                await loadOnlineUsers();
+
+                if (selectedUserId) {
+                    enableChat();
+                    await loadUserInfo(selectedUserId);
+                    await loadPreviousMessages(selectedUserId);
+                }
+            } catch (err) {
+                console.error("Error connecting:", err);
+                setTimeout(startConnection, 5000);
+            }
+        }
+
+        connection.onclose(async () => {
+            console.log("Connection closed. Attempting to reconnect...");
+            await startConnection();
+        });
+
+        connection.onreconnecting(() => {
+            console.log("Attempting to reconnect...");
+            showConnectionStatus("Reconnecting...", "warning");
+        });
+
+        connection.onreconnected(() => {
+            console.log("Reconnected");
+            showConnectionStatus("Connected", "success");
+            loadOnlineUsers();
+        });
+
+        async function loadOnlineUsers() {
+            try {
+                const response = await fetch('/Contacts/GetContacts');
+                const contacts = await response.json();
+                updateOnlineUsersList(contacts);
+            } catch (error) {
+                console.error('Error loading online users:', error);
+                showError('Failed to load contacts');
+            }
+        }
+
+        function updateOnlineUsersList(users) {
+            const onlineUsersList = document.getElementById('onlineUsersList');
+            onlineUsersList.innerHTML = '';
+
+            users.forEach(user => {
+                const userElement = document.createElement('a');
+                userElement.href = '#';
+                userElement.className = `list-group-item list-group-item-action d-flex justify-content-between align-items-center
+                    ${user.id === selectedUserId ? 'active' : ''}`;
+                userElement.onclick = (e) => {
+                    e.preventDefault();
+                    startChat(user.id);
+                };
+
+                const userContent = document.createElement('div');
+                userContent.className = 'd-flex align-items-center';
+
+                const userAvatar = document.createElement('div');
+                userAvatar.className = 'user-avatar me-3';
+                userAvatar.innerHTML = '<i class="bi bi-person-circle"></i>';
+
+                const userInfo = document.createElement('div');
+                userInfo.className = 'd-flex flex-column';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = user.userName;
+                nameSpan.className = 'fw-medium';
+
+                const statusBadge = document.createElement('small');
+                statusBadge.id = `status-${user.id}`;
+                statusBadge.className = `text-muted`;
+                statusBadge.textContent = user.status || 'Offline';
+
+                const unreadBadge = document.createElement('span');
+                unreadBadge.id = `unread-${user.id}`;
+                unreadBadge.className = 'badge bg-danger rounded-pill';
+                unreadBadge.style.display = 'none';
+                unreadBadge.textContent = '0';
+
+                userInfo.appendChild(nameSpan);
+                userInfo.appendChild(statusBadge);
+                userContent.appendChild(userAvatar);
+                userContent.appendChild(userInfo);
+                userElement.appendChild(userContent);
+                userElement.appendChild(unreadBadge);
+                onlineUsersList.appendChild(userElement);
+
+                const unreadCount = unreadMessages.get(user.id);
+                if (unreadCount) {
+                    updateUnreadBadge(user.id, unreadCount);
+                }
+            });
+        }
+
+        function getStatusBadgeClass(status) {
+            switch (status?.toLowerCase()) {
+                case 'online': return 'bg-success';
+                case 'away': return 'bg-warning';
+                case 'busy': return 'bg-danger';
+                case 'do not disturb': return 'bg-danger';
+                default: return 'bg-secondary';
+            }
+        }
+
+        function startChat(userId) {
+            selectedUserId = userId;
+            history.pushState(null, '', `/Chat?userId=${userId}`);
+            enableChat();
+            loadUserInfo(userId);
+            loadPreviousMessages(userId);
+            updateUnreadBadge(userId, 0);
+            unreadMessages.delete(userId);
+        }
+
+        function enableChat() {
+            document.getElementById("messageInput").disabled = false;
+            document.getElementById("sendButton").disabled = false;
+        }
+
+        function showConnectionStatus(message, type) {
+            const messagesList = document.getElementById("messagesList");
+            const statusDiv = document.createElement("div");
+            statusDiv.className = `alert alert-${type}`;
+            statusDiv.textContent = message;
+            messagesList.appendChild(statusDiv);
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
+
+        function appendMessage(message, isReceived) {
+            const messagesList = document.getElementById("messagesList");
+            const messageDate = new Date(message.timestamp || message.sentAt);
+
+            if (shouldShowDateSeparator(messageDate)) {
+                messagesList.appendChild(createDateSeparator(messageDate));
+            }
+
+            const messageDiv = document.createElement("div");
+            messageDiv.className = `chat-message ${isReceived ? 'received' : 'sent'}`;
+
+            const formattedTime = formatMessageDateTime(messageDate);
+
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="message-body">${escapeHtml(message.content)}</div>
+                    <small class="message-time">${formattedTime}</small>
+                </div>
+            `;
+
+            messagesList.appendChild(messageDiv);
+            messagesList.scrollTop = messagesList.scrollHeight;
+
+            if (isReceived && message.messageId) {
+                connection.invoke("MarkMessageAsRead", message.messageId);
+            }
+        }
+
+        function updateUnreadBadge(userId, count) {
+            const badge = document.getElementById(`unread-${userId}`);
+            if (badge) {
+                badge.textContent = count;
+                badge.style.display = count > 0 ? 'inline' : 'none';
+            }
+        }
+
+        connection.on("ReceiveMessage", function (message) {
+            console.log("Received message:", message);
+            if (selectedUserId === message.senderId) {
+                appendMessage(message, true);
+            } else {
+                const currentCount = unreadMessages.get(message.senderId) || 0;
+                unreadMessages.set(message.senderId, currentCount + 1);
+                updateUnreadBadge(message.senderId, currentCount + 1);
+                showNotification(message.senderName, message.content);
+            }
+        });
+
+        connection.on("MessageSent", function (message) {
+            console.log("Sent message:", message);
+            appendMessage(message, false);
+        });
+
+        connection.on("UserStatusUpdated", function (userId, status) {
+            console.log("Status updated:", userId, status);
+            const statusElement = document.getElementById(`status-${userId}`);
+            if (statusElement) {
+                statusElement.textContent = status;
+            }
+
+            if (selectedUserId === userId) {
+                updateSelectedUserStatus(status);
+            }
+        });
+
+        connection.on("UserConnected", function (userId) {
+            console.log("User connected:", userId);
+            updateUserStatus(userId, "Online");
+        });
+
+        connection.on("UserDisconnected", function (userId) {
+            console.log("User disconnected:", userId);
+            updateUserStatus(userId, "Offline");
+        });
+
+        connection.on("MessageRead", function (messageId) {
+            console.log("Message read:", messageId);
+            const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+            if (messageElement) {
+                messageElement.classList.add('read');
+            }
+        });
+
+        document.getElementById("sendButton").addEventListener("click", sendMessage);
+        document.getElementById("messageInput").addEventListener("keypress", function (event) {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+
+        document.getElementById("statusSelect").addEventListener("change", function (event) {
+            connection.invoke("UpdateStatus", event.target.value)
+                .catch(function (err) {
+                    console.error(err);
+                    showError('Failed to update status');
+                });
+        });
+
+        async function sendMessage() {
+            if (!selectedUserId) return;
+
+            const messageInput = document.getElementById("messageInput");
+            const message = messageInput.value.trim();
+
+            if (message) {
+                messageInput.value = "";
+                try {
+                    await connection.invoke("SendMessage", selectedUserId, message);
+                } catch (error) {
+                    console.error(error);
+                    showError('Failed to send message');
+                    messageInput.value = message;
+                }
+            }
+        }
+
+        function updateUserStatus(userId, status) {
+            const statusElement = document.getElementById(`status-${userId}`);
+            if (statusElement) {
+                statusElement.textContent = status;
+            }
+        }
+
+        async function loadUserInfo(userId) {
+            try {
+                const response = await fetch(`/Contacts/GetUser/${userId}`);
+                const user = await response.json();
+                document.getElementById('selectedUserName').textContent = user.userName;
+                currentUserName = user.userName;
+                updateSelectedUserStatus(user.status);
+            } catch (error) {
+                console.error('Error loading user info:', error);
+                showError('Failed to load user information');
+            }
+        }
+
+        async function loadPreviousMessages(userId) {
+                    try {
+                        const response = await fetch(`/Chat/GetMessages?userId=${userId}`);
+                        const messages = await response.json();
+                        const messagesList = document.getElementById("messagesList");
+                        messagesList.innerHTML = '';
+                        lastMessageDate = null; // Reset the last message date
+                        messages.forEach(message => {
+                            appendMessage(message, message.senderId === selectedUserId);
+                        });
+                        messagesList.scrollTop = messagesList.scrollHeight;
+                    } catch (error) {
+                        console.error('Error loading messages:', error);
+                        showError('Failed to load message history');
+                    }
+                }
+
+                function updateSelectedUserStatus(status) {
+                    const userStatus = document.getElementById('userStatus');
+                    userStatus.textContent = status;
+                }
+
+                function showNotification(title, message) {
+                    if (Notification.permission === "granted") {
+                        new Notification(title, {
+                            body: message,
+                            icon: '/favicon.ico'
+                        });
+                    } else if (Notification.permission !== "denied") {
+                        Notification.requestPermission().then(permission => {
+                            if (permission === "granted") {
+                                new Notification(title, {
+                                    body: message,
+                                    icon: '/favicon.ico'
+                                });
+                            }
+                        });
+                    }
+                }
+
+                function showError(message) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger alert-dismissible fade show';
+                    errorDiv.innerHTML = `
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+                    document.querySelector('.chat-container').insertBefore(errorDiv, document.getElementById('messagesList'));
+
+                    setTimeout(() => {
+                        errorDiv.remove();
+                    }, 5000);
+                }
+
+                function escapeHtml(unsafe) {
+                    return unsafe
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;")
+                        .replace(/'/g, "&#039;");
+                }
+
+                document.addEventListener('DOMContentLoaded', function() {
+                    if ("Notification" in window) {
+                        Notification.requestPermission();
+                    }
+                });
+
+                startConnection();
+    </script>
+
+    <style>
+        .date-separator {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+
+            .date-separator::before {
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 50%;
+                width: 100%;
+                height: 1px;
+                background: #e0e0e0;
+                z-index: 1;
+            }
+
+            .date-separator span {
+                background: white;
+                padding: 0 10px;
+                color: #666;
+                font-size: 0.9em;
+                position: relative;
+                z-index: 2;
+            }
+    </style>
+}

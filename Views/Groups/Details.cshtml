@@ -1,0 +1,468 @@
+﻿@model ChatterBox.Models.Group
+
+@{
+    ViewData["Title"] = "Group Details";
+}
+
+<div class="container-fluid p-4">
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <h5 class="mb-0">Group Information</h5>
+                    </div>
+                    @if (Model.CreatedById == ViewBag.CurrentUserId)
+                    {
+                        <div class="btn-group">
+                            <a asp-action="Edit" asp-route-id="@Model.GroupId"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil me-1"></i>
+                                Edit
+                            </a>
+                            <a asp-action="Delete" asp-route-id="@Model.GroupId"
+                               class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash me-1"></i>
+                                Delete
+                            </a>
+                        </div>
+                    }
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="user-avatar me-3">
+                            @if (Model.IsPrivate)
+                            {
+                                <i class="bi bi-lock-fill"></i>
+                            }
+                            else
+                            {
+                                <i class="bi bi-people-fill"></i>
+                            }
+                        </div>
+                        <h5 class="mb-0">@Model.Name</h5>
+                    </div>
+                    <div class="group-info mb-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-person-fill me-2"></i>
+                            <span>Created by @Model.CreatedBy?.UserName</span>
+                        </div>
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-calendar-fill me-2"></i>
+                            <span>
+                                @TimeZoneInfo.ConvertTimeFromUtc(
+                                         Model.CreatedAt.ToUniversalTime(),
+                                         TimeZoneInfo.FindSystemTimeZoneById("Europe/Amsterdam")
+                                         ).ToString("MMM dd, yyyy")
+
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-shield-fill me-2"></i>
+                            <span>@(Model.IsPrivate ? "Private Group" : "Public Group")</span>
+                        </div>
+                    </div>
+
+                    @if (!ViewBag.IsMember)
+                    {
+                        <form asp-action="Join" asp-route-id="@Model.GroupId" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-person-plus-fill me-2"></i>
+                                Join Group
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        <form asp-action="Leave" asp-route-id="@Model.GroupId" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-outline-danger w-100">
+                                <i class="bi bi-person-dash-fill me-2"></i>
+                                Leave Group
+                            </button>
+                        </form>
+                    }
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header d-flex align-items-center">
+                    <i class="bi bi-people-fill me-2"></i>
+                    <h5 class="mb-0">Members (@Model.Members?.Count)</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        @foreach (var member in Model.Members ?? Enumerable.Empty<GroupMember>())
+                        {
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-2">
+                                        <i class="bi bi-person-circle"></i>
+                                    </div>
+                                    <span>@member.User?.UserName</span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-primary">@member.Role</span>
+                                    <a asp-action="DirectMessage" asp-controller="Groups" asp-route-id="@member.UserId" class="btn btn-sm btn-outline-secondary ms-2">
+                                        <i class="bi bi-chat"></i> Direct Message
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar me-3">
+                            @if (Model.IsPrivate)
+                            {
+                                <i class="bi bi-lock-fill"></i>
+                            }
+                            else
+                            {
+                                <i class="bi bi-people-fill"></i>
+                            }
+                        </div>
+                        <div>
+                            <h5 class="mb-0">@Model.Name</h5>
+                            <small class="text-muted">@Model.Members?.Count members</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="messagesList" class="chat-messages">
+                    @if (ViewBag.Messages != null && ((IEnumerable<Message>)ViewBag.Messages).Any())
+                    {
+                        string lastDate = null;
+                        foreach (var message in ViewBag.Messages)
+                        {
+                            var messageDate = TimeZoneInfo.ConvertTimeFromUtc(
+                            message.SentAt.ToUniversalTime(), TimeZoneInfo.FindSystemTimeZoneById("Europe/Amsterdam")
+                            );
+                            var currentDate = messageDate.ToString("MM/dd/yyyy");
+
+
+                            if (lastDate != currentDate)
+                            {
+                                <div class="date-separator">
+                                    <span>
+                                        @if (messageDate.Date == DateTime.Now.Date)
+                                        {
+                                            @:Today
+                                        }
+                                        else if (messageDate.Date == DateTime.Now.Date.AddDays(-1))
+                                        {
+                                            @:Yesterday
+                                        }
+                                        else
+                                        {
+                                            @messageDate.ToString("MMMM dd, yyyy")
+                                        }
+                                    </span>
+                                </div>
+                                lastDate = currentDate;
+                            }
+
+                            <div class="chat-message @(message.SenderId == ViewBag.CurrentUserId ? "sent" : "received")">
+                                <div class="message-content">
+                                    <div class="message-header">
+                                        <small>@message.Sender?.UserName</small>
+                                    </div>
+                                    <div class="message-body">@message.Content</div>
+                                    <small class="message-time">
+                                        @messageDate.ToString("hh:mm tt")
+                                    </small>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted p-4">
+                            <i class="bi bi-chat-dots fs-1"></i>
+                            <p class="mt-2">No messages yet. Start the conversation!</p>
+                        </div>
+                    }
+                </div>
+
+                @if (ViewBag.IsMember)
+                {
+                    <div class="chat-input-container">
+                        <input type="text" id="messageInput" class="chat-input"
+                               placeholder="Type your message...">
+                        <button class="chat-send-btn" type="button" id="sendButton" disabled>
+                            <i class="bi bi-send-fill"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="connectionStatus" class="alert alert-warning"
+     style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+    <i class="bi bi-wifi me-2"></i>
+    Reconnecting...
+</div>
+
+@section Scripts {
+    <script src="~/lib/microsoft/signalr/dist/browser/signalr.js"></script>
+    <script>
+        const groupId = @Model.GroupId;
+        let retryCount = 0;
+        const maxRetries = 5;
+        let isConnected = false;
+        let lastMessageDate = null;
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/chatHub")
+            .withAutomaticReconnect([0, 2000, 5000, 10000, 20000])
+            .configureLogging(signalR.LogLevel.Information)
+            .build();
+
+        const sendButton = document.getElementById("sendButton");
+        const messageInput = document.getElementById("messageInput");
+        const connectionStatus = document.getElementById("connectionStatus");
+        const messagesList = document.getElementById("messagesList");
+
+        function formatMessageDateTime(dateString) {
+            const messageDate = new Date(dateString);
+            const now = new Date();
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            const isToday = messageDate.toDateString() === now.toDateString();
+            const isYesterday = messageDate.toDateString() === yesterday.toDateString();
+
+            const time = messageDate.toLocaleTimeString('uk-UA', {
+                timeZone: 'Europe/Amsterdam',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+
+
+            if (isToday) {
+                return time;
+            } else if (isYesterday) {
+                return `Yesterday, ${time}`;
+            } else {
+                return messageDate.toLocaleString('uk-UA', {
+                    timeZone: 'Europe/Amsterdam',
+                    month: 'short',
+                    day: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+
+            }
+        }
+
+        function shouldShowDateSeparator(messageDate) {
+            const currentDate = new Date(messageDate).toDateString();
+            if (currentDate !== lastMessageDate) {
+                lastMessageDate = currentDate;
+                return true;
+            }
+            return false;
+        }
+
+        function createDateSeparator(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            let dateText;
+            if (date.toDateString() === now.toDateString()) {
+                dateText = 'Today';
+            } else if (date.toDateString() === yesterday.toDateString()) {
+                dateText = 'Yesterday';
+            } else {
+                dateText = date.toLocaleDateString('uk-UA', {
+                    timeZone: 'Europe/Amsterdam',
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+
+            }
+
+            const separator = document.createElement('div');
+            separator.className = 'date-separator';
+            separator.innerHTML = `<span>${dateText}</span>`;
+            return separator;
+        }
+
+        async function startConnection() {
+            try {
+                await connection.start();
+                console.log("Connected to SignalR hub");
+                await connection.invoke("JoinGroup", groupId);
+                isConnected = true;
+                updateConnectionState(true);
+                retryCount = 0;
+            } catch (err) {
+                console.error("SignalR Connection Error: ", err);
+                isConnected = false;
+                updateConnectionState(false);
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    setTimeout(startConnection, 5000);
+                }
+            }
+        }
+
+        connection.onclose(async () => {
+            isConnected = false;
+            updateConnectionState(false);
+            console.log("Connection closed");
+            await startConnection();
+        });
+
+        connection.onreconnecting(() => {
+            isConnected = false;
+            updateConnectionState(false);
+            console.log("Attempting to reconnect...");
+        });
+
+        connection.onreconnected(async () => {
+            isConnected = true;
+            updateConnectionState(true);
+            console.log("Reconnected");
+            await connection.invoke("JoinGroup", groupId);
+        });
+
+        connection.on("ReceiveGroupMessage", function (message) {
+            const messageDate = new Date(message.sentAt);
+            if (shouldShowDateSeparator(messageDate)) {
+                messagesList.appendChild(createDateSeparator(messageDate));
+            }
+
+            const isCurrentUser = message.senderId === '@ViewBag.CurrentUserId';
+            const formattedTime = formatMessageDateTime(message.sentAt);
+
+            const messageDiv = document.createElement("div");
+            messageDiv.className = `chat-message ${isCurrentUser ? "sent" : "received"}`;
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="message-header">
+                        <small>${message.senderName}</small>
+                    </div>
+                    <div class="message-body">${escapeHtml(message.content)}</div>
+                    <small class="message-time">${formattedTime}</small>
+                </div>
+            `;
+
+            messagesList.appendChild(messageDiv);
+            messagesList.scrollTop = messagesList.scrollHeight;
+        });
+
+        function updateConnectionState(isConnected) {
+            if (sendButton) {
+                sendButton.disabled = !isConnected;
+            }
+            connectionStatus.style.display = isConnected ? "none" : "block";
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        async function sendMessage() {
+            if (!isConnected) {
+                alert("Not connected. Please wait for reconnection.");
+                return;
+            }
+
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            try {
+                await connection.invoke("SendGroupMessage", groupId, message);
+                messageInput.value = "";
+            } catch (err) {
+                console.error("Error sending message:", err);
+                alert("Failed to send message. Please try again.");
+            }
+        }
+
+        if (sendButton) {
+            sendButton.addEventListener("click", sendMessage);
+        }
+
+        if (messageInput) {
+            messageInput.addEventListener("keypress", function (e) {
+                if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        }
+
+        function scrollToBottom() {
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
+
+        startConnection().then(scrollToBottom);
+
+                window.addEventListener('beforeunload', async () => {
+                    if (isConnected) {
+                        try {
+                            await connection.invoke("LeaveGroup", groupId);
+                            await connection.stop();
+                        } catch (err) {
+                            console.error("Error during cleanup:", err);
+                        }
+                    }
+                });
+
+                const observer = new MutationObserver(scrollToBottom);
+                observer.observe(messagesList, { childList: true });
+    </script>
+
+    <style>
+        /* Only keeping the date separator styles */
+        .date-separator {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+
+            .date-separator::before {
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 50%;
+                width: 100%;
+                height: 1px;
+                background: #e0e0e0;
+                z-index: 1;
+            }
+
+            .date-separator span {
+                background: white;
+                padding: 0 10px;
+                color: #666;
+                font-size: 0.9em;
+                position: relative;
+                z-index: 2;
+            }
+    </style>
+}

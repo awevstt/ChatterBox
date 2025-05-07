@@ -1,0 +1,340 @@
+﻿@model IEnumerable<ChatterBox.Models.ApplicationUser>
+@{
+    ViewData["Title"] = "Contacts";
+    var pendingRequests = ViewData["PendingRequests"] as List<ChatterBox.Models.ApplicationUser>;
+    var outgoingRequests = ViewData["OutgoingRequests"] as List<ChatterBox.Models.ApplicationUser>;
+}
+
+<div class="container-fluid p-4">
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header d-flex align-items-center">
+                    <i class="bi bi-person-plus-fill me-2"></i>
+                    <h5 class="mb-0">Add New Contact</h5>
+                </div>
+                <div class="card-body">
+                    <div class="input-group mb-3">
+                        <input type="text" id="searchInput" class="form-control" placeholder="Search by username or email...">
+                        <button class="btn btn-primary" type="button" id="searchButton">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                    <div id="searchResults" class="list-group">
+                        <!-- Search results will be dynamically inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            @if (outgoingRequests != null && outgoingRequests.Any())
+            {
+                <div class="card mt-4">
+                    <div class="card-header d-flex align-items-center">
+                        <i class="bi bi-arrow-right-circle me-2"></i>
+                        <h5 class="mb-0">Sent Requests</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            @foreach (var request in outgoingRequests)
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <div class="user-avatar me-3">
+                                                <i class="bi bi-person-circle"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1">@request.UserName</h6>
+                                                <small class="text-muted">@request.Email</small>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <button class="btn btn-outline-danger btn-sm withdraw-request" data-user-id="@request.Id">
+                                                <i class="bi bi-x-circle me-1"></i>
+                                                Withdraw
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (pendingRequests != null && pendingRequests.Any())
+            {
+                <div class="card mt-4">
+                    <div class="card-header d-flex align-items-center">
+                        <i class="bi bi-clock-history me-2"></i>
+                        <h5 class="mb-0">Pending Requests</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            @foreach (var request in pendingRequests)
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <div class="user-avatar me-3">
+                                                <i class="bi bi-person-circle"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1">@request.UserName</h6>
+                                                <small class="text-muted">@request.Email</small>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-success btn-sm accept-request" data-user-id="@request.Id">
+                                                <i class="bi bi-check-lg me-1"></i>
+                                                Accept
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-sm decline-request" data-user-id="@request.Id">
+                                                <i class="bi bi-x-lg me-1"></i>
+                                                Decline
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex align-items-center">
+                    <i class="bi bi-people-fill me-2"></i>
+                    <h5 class="mb-0">My Contacts</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="contactsList" class="list-group list-group-flush">
+                        @if (Model != null && Model.Any())
+                        {
+                            @foreach (var contact in Model)
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <div class="user-avatar me-3">
+                                                <i class="bi bi-person-circle"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1">@contact.UserName</h6>
+                                                <small class="text-muted">@contact.Email</small>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-primary btn-sm chat-btn" data-user-id="@contact.Id">
+                                                <i class="bi bi-chat-dots-fill me-1"></i>
+                                                Chat
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-sm remove-contact" data-user-id="@contact.Id">
+                                                <i class="bi bi-person-x-fill me-1"></i>
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center p-4">
+                                <i class="bi bi-people fs-1 text-muted"></i>
+                                <p class="mt-2 text-muted">No contacts yet. Use the search to add new contacts.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            let searchTimeout;
+
+            $('#searchInput').on('keyup', function() {
+                clearTimeout(searchTimeout);
+                const searchTerm = $(this).val();
+
+                if (searchTerm.length < 2) {
+                    $('#searchResults').empty();
+                    return;
+                }
+
+                searchTimeout = setTimeout(() => {
+                    $.get('/Contacts/Search', { searchTerm: searchTerm })
+                        .done(function(users) {
+                            $('#searchResults').empty();
+                            users.forEach(user => {
+                                const userElement = $(`
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div class="d-flex align-items-center">
+                                                <div class="user-avatar me-3">
+                                                    <i class="bi bi-person-circle"></i>
+                                                </div>
+                                                <div>
+                                                    <h6 class="mb-1">${user.userName}</h6>
+                                                    <small class="text-muted">${user.email}</small>
+                                                </div>
+                                            </div>
+                                            <button class="btn btn-primary btn-sm add-contact" data-user-id="${user.id}">
+                                                <i class="bi bi-person-plus-fill me-1"></i>
+                                                Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                `);
+                                $('#searchResults').append(userElement);
+                            });
+                        })
+                        .fail(function() {
+                            $('#searchResults').html(`
+                                <div class="alert alert-danger">
+                                    Failed to search users. Please try again.
+                                </div>
+                            `);
+                        });
+                }, 500);
+            });
+
+            $(document).on('click', '.add-contact', function() {
+                const userId = $(this).data('user-id');
+                const button = $(this);
+                button.prop('disabled', true);
+
+                $.ajax({
+                    url: '/Contacts/Add',
+                    type: 'POST',
+                    data: { contactId: userId },
+                    success: function(response) {
+                        if (response.success) {
+                            location.reload();
+                        } else {
+                            showError(response.message || 'Failed to add contact');
+                            button.prop('disabled', false);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        showError('Failed to add contact: ' + error);
+                        button.prop('disabled', false);
+                    }
+                });
+            });
+
+            $(document).on('click', '.withdraw-request', function() {
+                const userId = $(this).data('user-id');
+                const button = $(this);
+                button.prop('disabled', true);
+
+                $.ajax({
+                    url: '/Contacts/WithdrawRequest',
+                    type: 'POST',
+                    data: { contactId: userId },
+                    success: function(response) {
+                        if (response.success) {
+                            location.reload();
+                        } else {
+                            showError(response.message || 'Failed to withdraw request');
+                            button.prop('disabled', false);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        showError('Failed to withdraw request: ' + error);
+                        button.prop('disabled', false);
+                    }
+                });
+            });
+
+            $(document).on('click', '.accept-request', function() {
+                const userId = $(this).data('user-id');
+                const button = $(this);
+                button.prop('disabled', true);
+
+                $.post('/Contacts/AcceptRequest', { userId: userId })
+                    .done(function(response) {
+                        if (response.success) {
+                            location.reload();
+                        } else {
+                            showError(response.message || 'Failed to accept request');
+                            button.prop('disabled', false);
+                        }
+                    })
+                    .fail(function() {
+                        showError('Failed to accept request');
+                        button.prop('disabled', false);
+                    });
+            });
+
+            $(document).on('click', '.decline-request', function() {
+                const userId = $(this).data('user-id');
+                const button = $(this);
+                button.prop('disabled', true);
+
+                $.post('/Contacts/DeclineRequest', { userId: userId })
+                    .done(function(response) {
+                        if (response.success) {
+                            location.reload();
+                        } else {
+                            showError(response.message || 'Failed to decline request');
+                            button.prop('disabled', false);
+                        }
+                    })
+                    .fail(function() {
+                        showError('Failed to decline request');
+                        button.prop('disabled', false);
+                    });
+            });
+
+            $(document).on('click', '.remove-contact', function() {
+                const userId = $(this).data('user-id');
+                const button = $(this);
+
+                if (confirm('Are you sure you want to remove this contact?')) {
+                    button.prop('disabled', true);
+
+                    $.post('/Contacts/Remove', { contactId: userId })
+                        .done(function(response) {
+                            if (response.success) {
+                                location.reload();
+                            } else {
+                                showError('Failed to remove contact');
+                                button.prop('disabled', false);
+                            }
+                        })
+                        .fail(function() {
+                            showError('Failed to remove contact');
+                            button.prop('disabled', false);
+                        });
+                }
+            });
+
+            $(document).on('click', '.chat-btn', function(e) {
+                e.preventDefault();
+                const userId = $(this).data('user-id');
+                window.location.href = `/Chat?userId=${userId}`;
+            });
+
+            function showError(message) {
+                const errorDiv = $(`
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                `);
+                $('.card-body').first().prepend(errorDiv);
+
+                setTimeout(() => {
+                    errorDiv.alert('close');
+                }, 5000);
+            }
+        });
+    </script>
+}

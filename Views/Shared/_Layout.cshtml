@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ChatterBox</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/ChatterBox.styles.css" asp-append-version="true" />
+    <style>
+        .btn-link.nav-link {
+            color: rgba(0, 0, 0, 0.65);
+        }
+
+            .btn-link.nav-link:hover {
+                color: rgba(0, 0, 0, 0.8);
+            }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-lg navbar-light bg-white">
+            <div class="container-fluid">
+                <a class="navbar-brand" asp-controller="Home" asp-action="Index">
+                    <img src="~/images/chatterbox-logo.png" alt="ChatterBox Logo" width="40" height="40" class="me-2" />
+                    ChatterBox
+                </a>
+
+                <!-- Right-aligned items including notification and burger -->
+                <div class="d-flex align-items-center order-lg-last">
+                    <div class="dropdown">
+                        <button class="btn btn-link nav-link position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bell"></i>
+                            <span id="notificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="display: none;">
+                                0
+                            </span>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end p-0" style="width: 300px;">
+                            <div class="d-flex justify-content-between align-items-center p-3">
+                                <h6 class="mb-0">Notifications</h6>
+                                <button id="markAllRead" class="btn btn-link btn-sm text-decoration-none p-0">Mark all read</button>
+                            </div>
+                            <div class="dropdown-divider m-0"></div>
+                            <div id="notificationList" class="notification-list">
+                                <!-- Notifications will be dynamically inserted here -->
+                            </div>
+                            <div class="dropdown-divider m-0"></div>
+                            <a asp-controller="Notification" asp-action="Index" class="dropdown-item text-center p-2">View all notifications</a>
+                        </div>
+                    </div>
+
+                    <!-- Burger Menu Button -->
+                    <button class="navbar-toggler ms-2 d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                </div>
+
+                <!-- Collapsible Content -->
+                <div class="navbar-collapse collapse" id="navbarContent">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Chat" asp-action="Index">Chat</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Contacts" asp-action="Index">Contacts</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Groups" asp-action="Index">Groups</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Privacy">Privacy</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="AIChat" asp-action="Index">AI Chat</a>
+                        </li>
+
+                    </ul>
+
+                    <div class="d-flex align-items-center gap-3">
+                        @if (User.Identity?.IsAuthenticated ?? false)
+                        {
+                            <div class="dropdown">
+                                <button class="btn btn-link nav-link dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-person-circle"></i>
+                                    <span>@User.Identity?.Name</span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" asp-area="Identity" asp-page="/Account/Manage/Index">Profile</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="@Url.Action("Index", "Home", new { area = "" })">
+                                            <button type="submit" class="dropdown-item">Logout</button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        }
+                        else
+                        {
+                            <a class="btn btn-outline-primary me-2" asp-area="Identity" asp-page="/Account/Register">Register</a>
+                            <a class="btn btn-primary" asp-area="Identity" asp-page="/Account/Login">Login</a>
+                        }
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="text-center">
+                <small>&copy; 2024 ChatterBox</small>
+                <span class="mx-2">·</span>
+                <small><a asp-controller="Home" asp-action="Privacy">Privacy</a></small>
+            </div>
+        </div>
+    </footer>
+
+    <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3"></div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <script src="~/js/notification.js"></script>
+    <script src="~/js/site.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.notificationSystem) {
+                window.notificationSystem.init().catch(console.error);
+            }
+        });
+    </script>
+</body>
+</html>
