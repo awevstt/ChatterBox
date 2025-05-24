@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using ChatterBox.Models;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+
 
 namespace ChatterBox.Data
 {
@@ -13,8 +15,12 @@ namespace ChatterBox.Data
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)
         {
-            // Increase command timeout for migrations
-            Database.SetCommandTimeout(60);
+            if (Database.IsRelational())
+            {
+                // Increase command timeout for migrations
+                Database.SetCommandTimeout(60);
+            }
+
         }
 
         public DbSet<Message> Messages { get; set; } = null!;

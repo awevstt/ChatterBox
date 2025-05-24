@@ -29,7 +29,7 @@ namespace ChatterBox.Hubs
             _context = context;
             _notificationService = notificationService;
         }
-
+      
         private DateTime GetUkraineTime()
         {
             return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _ukraineTimeZone);
